@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ants — 棒の上のアリ</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --bg:#EDEEE9; --surface:#F7F7F3; --surface-2:#E1E3DC;
+  --text:#1B211C; --text-dim:#5F665E; --text-faint:#8B928A;
+  --rule:#CBCEC4; --rule-soft:#DEE0D7;
+  --accent:#8E6A28; --bar:#C9CCC2; --grid:rgba(27,33,28,.08);
+  --f-body:"Yu Gothic UI","Yu Gothic","Hiragino Sans","Hiragino Kaku Gothic ProN","Segoe UI",system-ui,-apple-system,sans-serif;
+  --f-mono:"Cascadia Mono",Consolas,ui-monospace,"SF Mono",Menlo,monospace;
+  --is-dark:0;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121512; --surface:#191D19; --surface-2:#232823;
+    --text:#E2E6DE; --text-dim:#98A095; --text-faint:#6E766C;
+    --rule:#2E352E; --rule-soft:#242A24;
+    --accent:#D2A34A; --bar:#3A423A; --grid:rgba(226,230,222,.08);
+    --is-dark:1;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121512; --surface:#191D19; --surface-2:#232823;
+  --text:#E2E6DE; --text-dim:#98A095; --text-faint:#6E766C;
+  --rule:#2E352E; --rule-soft:#242A24;
+  --accent:#D2A34A; --bar:#3A423A; --grid:rgba(226,230,222,.08);
+  --is-dark:1;
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--f-body); font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+h1,h2,h3,p,dl,dd,dt,figure{ margin:0; }
+button,input{ font:inherit; color:inherit; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+code{ font-family:var(--f-mono); font-size:.88em; }
+
+.shell{
+  max-width:1180px; margin:0 auto; padding:26px 20px 52px;
+  display:grid; gap:18px 22px;
+  grid-template-columns:minmax(0,1fr) 282px;
+  grid-template-areas:"mast mast" "stage side" "notes notes";
+  align-items:start;
+}
+
+.mast{ grid-area:mast; border-bottom:1px solid var(--rule); padding-bottom:14px; }
+.mast h1{ font-size:19px; font-weight:600; letter-spacing:.01em; }
+.mast h1 span{ font-family:var(--f-mono); font-size:12px; font-weight:400; color:var(--text-faint); margin-left:10px; }
+.mast p{ margin-top:5px; max-width:66ch; color:var(--text-dim); font-size:13.5px; }
+
+.stage-col{ grid-area:stage; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.panel{ background:var(--surface); border:1px solid var(--rule); }
+.panel-head{ padding:8px 13px; border-bottom:1px solid var(--rule-soft); font-size:12px; color:var(--text-faint); }
+canvas{ display:block; width:100%; touch-action:none; }
+#scene{ height:196px; cursor:crosshair; }
+#chart{ height:clamp(220px,30vh,320px); }
+
+.transport{ display:flex; align-items:center; gap:11px; flex-wrap:wrap; padding:9px 12px; background:var(--surface); border:1px solid var(--rule); }
+.play{ width:31px; height:31px; flex:none; border:1px solid var(--accent); background:var(--accent); color:var(--surface); cursor:pointer; display:grid; place-items:center; font-size:11px; line-height:1; }
+.time{ font-family:var(--f-mono); font-size:12.5px; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--text-dim); }
+.time b{ color:var(--text); font-weight:600; }
+#scrub{ flex:1 1 170px; min-width:110px; }
+.chk{ display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap; }
+.chk input{ accent-color:var(--accent); }
+
+input[type=range]{ -webkit-appearance:none; appearance:none; background:transparent; height:18px; cursor:pointer; }
+input[type=range]::-webkit-slider-runnable-track{ height:3px; background:var(--track,var(--surface-2)); }
+input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); margin-top:-4.5px; border:2px solid var(--surface); }
+input[type=range]::-moz-range-track{ height:3px; background:var(--track,var(--surface-2)); }
+input[type=range]::-moz-range-thumb{ width:10px; height:10px; border-radius:50%; background:var(--accent); border:2px solid var(--surface); }
+
+.seg{ display:inline-flex; border:1px solid var(--rule); background:var(--bg); }
+.seg button{ border:0; background:transparent; padding:4px 9px; font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap; }
+.seg button + button{ border-left:1px solid var(--rule); }
+.seg button:hover{ background:var(--surface-2); }
+.seg button[aria-pressed="true"]{ background:var(--accent); color:var(--surface); }
+
+.modebar{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.modenote{ font-size:12.5px; color:var(--text-dim); flex:1 1 240px; min-width:0; }
+.modenote b{ color:var(--text); font-weight:600; }
+
+.side{ grid-area:side; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.card{ background:var(--surface); border:1px solid var(--rule); padding:12px; }
+.card-h{ font-size:12px; color:var(--text-faint); font-weight:400; margin-bottom:9px; display:flex; justify-content:space-between; gap:8px; }
+.row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.row label{ font-size:13px; color:var(--text-dim); }
+.stepper{ display:inline-flex; align-items:center; border:1px solid var(--rule); background:var(--bg); }
+.stepper input{ width:52px; border:0; background:transparent; text-align:center; padding:3px 2px; font-family:var(--f-mono); font-size:12.5px; font-variant-numeric:tabular-nums; -moz-appearance:textfield; }
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.sq{ border:0; background:transparent; width:24px; padding:3px 0; cursor:pointer; color:var(--text-dim); line-height:1; }
+.sq:hover{ background:var(--surface-2); color:var(--text); }
+
+.btnrow{ display:flex; gap:6px; flex-wrap:wrap; }
+.btn{ flex:1 1 auto; border:1px solid var(--rule); background:var(--bg); padding:4px 8px; font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap; }
+.btn:hover{ background:var(--surface-2); color:var(--text); }
+.hint{ font-size:11.5px; color:var(--text-faint); margin-top:8px; line-height:1.55; }
+
+.antlist{ display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; }
+.ant-row{ display:flex; align-items:center; gap:7px; font-size:12.5px; }
+.swatch{ width:8px; height:8px; border-radius:50%; flex:none; }
+.ant-x{ font-family:var(--f-mono); font-variant-numeric:tabular-nums; flex:1; color:var(--text-dim); }
+.mini{ border:1px solid var(--rule); background:var(--bg); cursor:pointer; width:25px; height:21px; display:grid; place-items:center; font-size:12px; color:var(--text-dim); padding:0; }
+.mini:hover{ background:var(--surface-2); color:var(--text); }
+.mini.dir{ font-family:var(--f-mono); width:29px; }
+.empty{ font-size:12px; color:var(--text-faint); }
+
+.stats{ display:grid; grid-template-columns:1fr auto; gap:6px 10px; align-items:baseline; }
+.stats dt{ font-size:12.5px; color:var(--text-dim); }
+.stats dd{ font-family:var(--f-mono); font-size:13.5px; font-variant-numeric:tabular-nums; text-align:right; }
+.stats dd.key{ color:var(--accent); font-weight:600; }
+.stats .div{ grid-column:1/-1; height:1px; background:var(--rule-soft); }
+
+.notes{ grid-area:notes; border-top:1px solid var(--rule); padding-top:20px; display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); }
+.note h3{ font-size:14px; font-weight:600; margin-bottom:6px; }
+.note p{ font-size:13px; color:var(--text-dim); max-width:46ch; }
+.note p + p{ margin-top:7px; }
+.note b{ color:var(--text); font-weight:600; }
+.formula{ font-family:var(--f-mono); font-size:12px; background:var(--surface); border:1px solid var(--rule); padding:8px 11px; margin-top:9px; overflow-x:auto; white-space:pre; line-height:1.75; color:var(--text); }
+.kbd{ font-family:var(--f-mono); font-size:11px; border:1px solid var(--rule); padding:0 4px; color:var(--text-dim); }
+
+@media (max-width:880px){
+  .shell{ grid-template-columns:minmax(0,1fr); grid-template-areas:"mast" "stage" "side" "notes"; }
+  .side{ display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); align-items:start; }
+}
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="mast">
+    <h1>棒の上のアリ<span>POJ 1852 — Ants</span></h1>
+    <p>長さ L の棒の上を n 匹のアリが毎秒 1cm で歩く。出会った 2 匹は向きを反転し、端まで来たアリは落ちる。全員が落ちるまでの時間は？</p>
+  </header>
+
+  <div class="stage-col">
+
+    <div class="panel"><canvas id="scene"></canvas></div>
+
+    <div class="transport">
+      <button class="play" id="playBtn" aria-label="再生 / 一時停止">▶</button>
+      <div class="time"><b id="tNow">0.00</b> / <span id="tEnd">0.00</span></div>
+      <input type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="時刻">
+      <div class="seg" id="speedSeg">
+        <button type="button" data-sp="0.25">¼×</button>
+        <button type="button" data-sp="0.5">½×</button>
+        <button type="button" data-sp="1" aria-pressed="true">1×</button>
+        <button type="button" data-sp="2">2×</button>
+        <button type="button" data-sp="4">4×</button>
+      </div>
+      <button class="btn" id="resetBtn" style="flex:0 0 auto">最初から</button>
+      <label class="chk"><input type="checkbox" id="loopChk" checked>ループ</label>
+    </div>
+
+    <div class="modebar">
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="ant" aria-pressed="true">反転</button>
+        <button type="button" data-mode="ghost" aria-pressed="false">すり抜け</button>
+      </div>
+      <p class="modenote" id="modeNote"></p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">時空図　横 = 位置 x ／ 縦↓ = 時間 t</div>
+      <canvas id="chart"></canvas>
+    </div>
+
+  </div>
+
+  <aside class="side">
+
+    <section class="card">
+      <h2 class="card-h">配置</h2>
+      <div class="row">
+        <label for="cntInput">アリの数 n</label>
+        <div class="stepper">
+          <button type="button" class="sq" data-cnt="-1" aria-label="減らす">−</button>
+          <input id="cntInput" type="number" min="0" max="24" step="1" value="6">
+          <button type="button" class="sq" data-cnt="1" aria-label="増やす">＋</button>
+        </div>
+      </div>
+      <div class="row">
+        <label for="lenInput">棒の長さ L</label>
+        <div class="stepper">
+          <button type="button" class="sq" data-len="-1" aria-label="短く">−</button>
+          <input id="lenInput" type="number" min="2" max="400" step="1" value="14">
+          <button type="button" class="sq" data-len="1" aria-label="長く">＋</button>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button type="button" class="btn" id="randBtn">ランダム配置</button>
+      </div>
+      <p class="hint">棒をクリックで追加／アリをクリックで反転／ドラッグで移動。<span class="kbd">Space</span> <span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">R</span></p>
+    </section>
+
+    <section class="card">
+      <h2 class="card-h">向き</h2>
+      <div class="btnrow" id="dirBtns">
+        <button type="button" class="btn" data-dir="min">最短</button>
+        <button type="button" class="btn" data-dir="max">最長</button>
+        <button type="button" class="btn" data-dir="flip">全反転</button>
+        <button type="button" class="btn" data-dir="rand">ランダム</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-h">アリ<span id="antCount"></span></h2>
+      <div class="antlist" id="antList"></div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-h">結果</h2>
+      <dl class="stats">
+        <dt>この向きでの全滅時刻</dt><dd class="key" id="sT">0</dd>
+        <div class="div"></div>
+        <dt>理論上の最短</dt><dd id="sMin">0</dd>
+        <dt>理論上の最長</dt><dd id="sMax">0</dd>
+        <div class="div"></div>
+        <dt>衝突回数</dt><dd id="sC">0</dd>
+        <dt>左 / 右に落ちた数</dt><dd id="sLR">0 / 0</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2 class="card-h">例題</h2>
+      <div class="btnrow" id="presets"></div>
+    </section>
+
+  </aside>
+
+  <section class="notes">
+    <article class="note">
+      <h3>反転は、名札の交換にすぎない</h3>
+      <p>2 匹が反転する瞬間を、「この 2 匹が<b>名札を交換して、そのまますれ違った</b>」と読み替える。棒の上に見えている位置と向きの集合はまったく同じで、区別がつかない。</p>
+      <p>モードを切り替えると、時空図の線は<b>1 本も動かない</b>まま、ジグザグが直線に変わる。変わったのは色 &mdash; つまり「どれを同じ 1 匹と見なすか」だけ。</p>
+    </article>
+
+    <article class="note">
+      <h3>だから答えは O(n) で出る</h3>
+      <p>すり抜けてよいなら、各アリは初期位置から向いている端までまっすぐ歩くだけ。落ちる時刻は左向きなら <code>x</code>、右向きなら <code>L−x</code>、全滅時刻はその最大値。向きが未知なら、それぞれ近い端／遠い端を選ばせればよい。</p>
+      <div class="formula">int mn = 0, mx = 0;
+for (int i = 0; i &lt; n; i++) {
+    mn = max(mn, min(x[i], L - x[i]));
+    mx = max(mx, max(x[i], L - x[i]));
+}</div>
+    </article>
+
+    <article class="note">
+      <h3>ただし「どのアリが」は別の話</h3>
+      <p>保たれているのは<b>位置の集合</b>であって、個体の対応ではない。「3 号がいつ、どちら側に落ちるか」を問われたら、この読み替えはそのままでは使えない。</p>
+      <p>使えるのはアリが<b>互いを追い越せない</b>ことのほう。左から <i>k</i> 番目のアリは、常に「生き残っているすり抜けアリのうち左から <i>k</i> 番目」の位置にいる &mdash; この対応づけを一段挟めば、個体の運命も追える。</p>
+    </article>
+  </section>
+
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ============================================================
+   1. シミュレーション本体（イベント駆動・本当に反転する）
+      アリは「点」として扱う。これが競プロの問題そのもの。
+   ============================================================ */
+function simulate(L, ants){
+  const n = ants.length;
+  const segs = ants.map(() => []);
+  const fall = ants.map(() => null);
+  const collisions = [];
+  const rank = new Array(n);
+  if (n === 0) return { segs, fall, collisions, rank, T:0, ghosts:[] };
+
+  const order = ants.map((_, i) => i).sort((a, b) => ants[a].x - ants[b].x || a - b);
+  order.forEach((id, r) => { rank[id] = r; });
+
+  // 生存アリ。アリは互いを追い越さないので、この配列は常に左から順に並んだまま。
+  let alive = order.map(id => ({ id, x: ants[id].x, d: ants[id].d }));
+  alive.forEach(a => segs[a.id].push({ t0:0, x0:a.x, d:a.d }));
+
+  const EPS = 1e-7;
+  let t = 0, guard = 0;
+
+  while (alive.length && guard++ < 20000){
+    // 次に何かが起きるまでの時間
+    let dt = Infinity;
+    for (let k = 0; k < alive.length; k++){
+      const a = alive[k];
+      const wall = a.d < 0 ? a.x : L - a.x;      // 端まで
+      if (wall < dt) dt = wall;
+      const b = alive[k + 1];                     // 隣とぶつかるまで（向かい合っている時だけ）
+      if (b && a.d > 0 && b.d < 0){
+        const meet = (b.x - a.x) / 2;
+        if (meet < dt) dt = meet;
+      }
+    }
+    if (!isFinite(dt)) break;
+    if (dt < 0) dt = 0;
+
+    for (const a of alive){
+      a.x += a.d * dt;
+      if (a.x < 0) a.x = 0; else if (a.x > L) a.x = L;
+    }
+    t += dt;
+
+    // この時刻に起きた衝突
+    const flip = new Set();
+    for (let k = 0; k + 1 < alive.length; k++){
+      const a = alive[k], b = alive[k + 1];
+      if (a.d > 0 && b.d < 0 && b.x - a.x < EPS){
+        flip.add(a.id); flip.add(b.id);
+        collisions.push({ t, x:(a.x + b.x) / 2, a:a.id, b:b.id });
+      }
+    }
+    // この時刻に落ちたアリ
+    const dead = new Set();
+    for (const a of alive){
+      if (a.d < 0 && a.x <= EPS){ dead.add(a.id); fall[a.id] = { t, side:-1 }; }
+      else if (a.d > 0 && a.x >= L - EPS){ dead.add(a.id); fall[a.id] = { t, side:1 }; }
+    }
+    // 軌跡の区間を閉じる
+    for (const a of alive){
+      if (dead.has(a.id) || flip.has(a.id)){
+        const s = segs[a.id][segs[a.id].length - 1];
+        s.t1 = t; s.x1 = a.x;
+      }
+    }
+    if (dead.size) alive = alive.filter(a => !dead.has(a.id));
+    // 反転して新しい区間を開く
+    for (const a of alive){
+      if (flip.has(a.id)){
+        a.d = -a.d;
+        segs[a.id].push({ t0:t, x0:a.x, d:a.d });
+      }
+    }
+    if (dt < EPS && flip.size === 0 && dead.size === 0) break; // 保険
+  }
+
+  let T = 0;
+  for (let i = 0; i < n; i++){
+    if (fall[i]) T = Math.max(T, fall[i].t);
+    const last = segs[i][segs[i].length - 1];
+    if (last && last.t1 === undefined){ last.t1 = t; last.x1 = last.x0 + last.d * (t - last.t0); }
+  }
+
+  // すり抜けアリ（ゴースト）: 初期状態のまま端まで直進する
+  const ghosts = ants.map((a, i) => ({ id:i, x0:a.x, d:a.d, tf: a.d < 0 ? a.x : L - a.x }));
+
+  // 各区間が、どのゴーストの直線に乗っているかを対応づける
+  for (let i = 0; i < n; i++){
+    for (const s of segs[i]){
+      const origin = s.x0 - s.d * s.t0;
+      let best = i, bd = Infinity;
+      for (const g of ghosts){
+        if (g.d !== s.d) continue;
+        const e = Math.abs(g.x0 - origin);
+        if (e < bd){ bd = e; best = g.id; }
+      }
+      s.g = best;
+    }
+  }
+  return { segs, fall, collisions, rank, T, ghosts };
+}
+
+function antAt(sim, i, t, L){
+  const f = sim.fall[i];
+  const segs = sim.segs[i];
+  if (f && t >= f.t){
+    return { fallen:true, ft:f.t, side:f.side, x:f.side < 0 ? 0 : L, d:f.side, seg:segs[segs.length - 1] };
+  }
+  for (let k = segs.length - 1; k >= 0; k--){
+    const s = segs[k];
+    if (t >= s.t0 - 1e-9) return { fallen:false, x:s.x0 + s.d * (t - s.t0), d:s.d, seg:s };
+  }
+  const s = segs[0];
+  return { fallen:false, x:s.x0, d:s.d, seg:s };
+}
+
+/* ============================================================
+   2. 状態
+   ============================================================ */
+const PRESETS = [
+  { name:"標準",     L:14,  x:[2,4,6,7,10,12],          d:[1,-1,1,-1,1,-1] },
+  { name:"例1",      L:10,  x:[2,6,7],                  d:[1,-1,1] },
+  { name:"例2",      L:214, x:[11,12,7,13,176,23,191],  d:[1,-1,1,-1,1,-1,1] },
+  { name:"対称",     L:16,  x:[3,5,8,11,13],            d:[1,1,-1,-1,-1] },
+  { name:"密集",     L:12,  x:[1,2,3,4,5,7,8,9,10,11],  d:[1,1,1,1,1,-1,-1,-1,-1,-1] },
+  { name:"1匹",      L:10,  x:[3],                      d:[-1] },
+];
+
+const state = { L:14, ants:[], t:0, playing:true, speed:1, mode:"ant", loop:true, restartAt:0 };
+let sim = null;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function loadPreset(p){
+  state.L = p.L;
+  state.ants = p.x.map((x, i) => ({ x, d:p.d[i] }));
+  resim(true);
+}
+function resim(resetTime){
+  sim = simulate(state.L, state.ants);
+  if (resetTime){ state.t = 0; state.restartAt = 0; }
+  else state.t = Math.min(state.t, sim.T);
+  syncUI();
+}
+
+/* ============================================================
+   3. テーマトークン
+   ============================================================ */
+let themeCache = null;
+function theme(){
+  if (themeCache) return themeCache;
+  const cs = getComputedStyle(document.documentElement);
+  const g = k => cs.getPropertyValue(k).trim();
+  themeCache = {
+    text:g("--text"), dim:g("--text-dim"), faint:g("--text-faint"),
+    rule:g("--rule"), grid:g("--grid"), accent:g("--accent"),
+    surface:g("--surface"), bar:g("--bar"), dark:g("--is-dark") === "1",
+  };
+  return themeCache;
+}
+const invalidateTheme = () => { themeCache = null; };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", invalidateTheme);
+new MutationObserver(invalidateTheme).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme","class","style"] });
+
+// 初期位置の順（左→右）に色を割り当てる。順序は不変なので、この対応は崩れない。
+const HUES = [4, 30, 48, 92, 152, 186, 212, 254, 292, 328];
+function idColor(rank, alpha){
+  const t = theme();
+  const h = HUES[((rank % HUES.length) + HUES.length) % HUES.length];
+  const s = t.dark ? 55 : 58, l = t.dark ? 63 : 38;
+  return alpha === undefined ? `hsl(${h} ${s}% ${l}%)` : `hsl(${h} ${s}% ${l}% / ${alpha})`;
+}
+// 表示モードに応じて、区間の色を決める（線は同じ、色の割り当てだけが変わる）
+function segColor(i, seg, alpha){
+  const r = state.mode === "ant" ? sim.rank[i] : sim.rank[seg.g];
+  return idColor(r, alpha);
+}
+
+/* ============================================================
+   4. キャンバス
+   ============================================================ */
+const PADL = 44, PADR = 44;
+const MONO = '"Cascadia Mono", Consolas, ui-monospace, "SF Mono", Menlo, monospace';
+
+function setupCanvas(cv){
+  const ctx = cv.getContext("2d");
+  const fit = () => {
+    const r = cv.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    cv.width = Math.max(1, Math.round(r.width * dpr));
+    cv.height = Math.max(1, Math.round(r.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cv._w = r.width; cv._h = r.height;
+  };
+  new ResizeObserver(fit).observe(cv);
+  fit();
+  return ctx;
+}
+const scene = document.getElementById("scene");
+const chart = document.getElementById("chart");
+const sctx = setupCanvas(scene);
+const cctx = setupCanvas(chart);
+
+function niceStep(v){
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+
+/* --- アリの絵。sx は向き（-1..1）。0 に近いほど「真横を向いている」＝向き変更の途中 --- */
+function drawAnt(ctx, x, y, sx, size, color, alpha){
+  const s = size / 8;
+  if (Math.abs(sx) < 0.12) sx = 0.12 * (sx < 0 ? -1 : 1);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  ctx.scale(sx * s, s);
+  ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineCap = "round";
+
+  if (size >= 11){
+    ctx.lineWidth = 0.62;                                   // 脚
+    for (let i = 0; i < 3; i++){
+      const bx = -0.4 + i * 0.95, sp = (i - 1) * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(bx, 0.2); ctx.lineTo(bx + sp, 2.5);
+      ctx.moveTo(bx, 0.2); ctx.lineTo(bx + sp, -2.5);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 0.5;                                    // 触角
+    ctx.beginPath();
+    ctx.moveTo(2.7, -0.5); ctx.quadraticCurveTo(4.1, -1.6, 4.7, -2.6);
+    ctx.moveTo(2.7, 0.5);  ctx.quadraticCurveTo(4.1, 1.6, 4.7, 2.6);
+    ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-2.7, 0, 2.0, 1.55, 0, 0, 7); ctx.fill();   // 腹部
+    ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(-1.1, 0); ctx.lineTo(-0.2, 0); ctx.stroke(); // 腹柄
+    ctx.beginPath(); ctx.ellipse(0.5, 0, 1.25, 1.05, 0, 0, 7); ctx.fill();   // 胸部
+    ctx.beginPath(); ctx.ellipse(2.6, 0, 1.45, 1.3, 0, 0, 7); ctx.fill();    // 頭
+  } else {
+    ctx.beginPath(); ctx.ellipse(-1.4, 0, 2.4, 1.7, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(2.2, 0, 1.5, 1.4, 0, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 体の長さ（棒の座標系）。20px 相当を基準に、詰まった配置では体を小さくする。
+function bodyUnits(pxPerUnit){
+  const xs = state.ants.map(a => a.x).sort((a, b) => a - b);
+  let mg = Infinity;
+  for (let i = 0; i + 1 < xs.length; i++) mg = Math.min(mg, xs[i + 1] - xs[i]);
+  return Math.min(20 / pxPerUnit, 0.6 * mg);
+}
+
+// 体の長さ w だけ間隔を空けつつ、点の位置 p にいちばん近い配置を求める。
+// q[k+1] - q[k] >= w の制約付き最小二乗 = u[k] = q[k] - k*w が単調増加、
+// つまり等調回帰（PAVA）。塊が何匹でも正しく展開でき、離れたアリは動かない。
+function separate(p, w){
+  const m = p.length, val = new Array(m), cnt = new Array(m);
+  let top = -1;
+  for (let k = 0; k < m; k++){
+    let v = p[k] - k * w, c = 1;
+    while (top >= 0 && val[top] > v){            // 直前の塊と逆転 → 併合
+      v = (val[top] * cnt[top] + v * c) / (cnt[top] + c);
+      c += cnt[top];
+      top--;
+    }
+    top++; val[top] = v; cnt[top] = c;
+  }
+  const q = new Array(m);
+  let k = 0;
+  for (let b = 0; b <= top; b++) for (let j = 0; j < cnt[b]; j++, k++) q[k] = val[b] + k * w;
+  return q;
+}
+
+/* --- 上段：棒の上 --- */
+function drawScene(){
+  const th = theme(), ctx = sctx, W = scene._w, H = scene._h;
+  ctx.clearRect(0, 0, W, H);
+  if (!sim) return;
+  const L = state.L, t = state.t;
+  const xa = PADL, xb = W - PADR, span = xb - xa;
+  const px = v => xa + (v / L) * span;
+  const BY = 78, BH = 12;
+  const pxPerUnit = span / L;
+  const w = bodyUnits(pxPerUnit);
+  const size = Math.max(5, Math.min(20, w * pxPerUnit));   // 描く体長 = w
+  const antY = BY - size * 0.33;
+
+  // 棒
+  ctx.fillStyle = th.bar;
+  ctx.fillRect(xa, BY, span, BH);
+
+  // 目盛り
+  ctx.font = "10px " + MONO;
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const step = niceStep(L / 8);
+  ctx.strokeStyle = th.rule; ctx.lineWidth = 1;
+  for (let v = 0; v <= L + 1e-9; v += step){
+    const X = Math.round(px(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(X, BY + BH); ctx.lineTo(X, BY + BH + 5); ctx.stroke();
+    ctx.fillStyle = th.faint;
+    ctx.fillText(String(Math.round(v * 100) / 100), px(v), BY + BH + 7);
+  }
+
+  // 落ちていく途中のアリ（両モード共通）
+  const drawFalling = (xv, side, u, sxv, color) => {
+    if (u < 0 || u >= 0.45) return;
+    drawAnt(ctx, px(xv), BY + 8 + 420 * u * u, sxv, size, color, 1 - u / 0.45);
+  };
+
+  if (state.mode === "ant"){
+    // 反転モード：体の長さぶん押し分けて、めり込ませない。
+    // 物理は点のまま。描画位置だけを、隣と触れたところで止める。
+    const alive = [];
+    for (let i = 0; i < state.ants.length; i++){
+      const a = antAt(sim, i, t, L);
+      const col = segColor(i, a.seg, undefined);
+      if (a.fallen) drawFalling(a.x, a.side, t - a.ft, a.side, col);
+      else alive.push({ i, a, col });
+    }
+    alive.sort((p, q) => sim.rank[p.i] - sim.rank[q.i]);   // = 左から順
+    const q = separate(alive.map(o => o.a.x), w);
+    for (let k = 0; k < alive.length; k++){
+      const cur = alive[k], seg = cur.a.seg;
+      // 向きを変えている途中は、体をその場で回して見せる
+      let sx = cur.a.d;
+      if (seg.t0 > 0){
+        const turn = Math.min(w / 2, seg.t1 - seg.t0);
+        const u = turn > 0 ? (t - seg.t0) / turn : 1;
+        if (u < 1) sx = cur.a.d * (2 * u - 1);
+      }
+      drawAnt(ctx, px(q[k]), antY, sx, size, cur.col, 1);
+    }
+  } else {
+    // すり抜けモード：ゴーストは直進し、互いを通り抜ける。
+    for (const g of sim.ghosts){
+      const col = idColor(sim.rank[g.id], undefined);
+      const x = g.x0 + g.d * t;
+      if (t >= g.tf) drawFalling(g.d < 0 ? 0 : L, g.d, t - g.tf, g.d, col);
+      else drawAnt(ctx, px(x), antY, g.d, size, col, 0.75);
+    }
+  }
+}
+
+/* --- 下段：時空図。線の形はモードによらず同一。色の割り当てだけが変わる。 --- */
+function drawChart(){
+  const th = theme(), ctx = cctx, W = chart._w, H = chart._h;
+  ctx.clearRect(0, 0, W, H);
+  if (!sim || !state.ants.length) return;
+  const L = state.L, Tm = Math.max(sim.T, 1e-6), t = state.t;
+  const xa = PADL, xb = W - PADR, ya = 15, yb = H - 15;
+  const px = v => xa + (v / L) * (xb - xa);
+  const py = v => ya + (v / Tm) * (yb - ya);
+
+  ctx.strokeStyle = th.grid; ctx.lineWidth = 1;
+  const xs = niceStep(L / 8);
+  for (let v = 0; v <= L + 1e-9; v += xs){
+    const X = Math.round(px(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(X, ya); ctx.lineTo(X, yb); ctx.stroke();
+  }
+  ctx.font = "10px " + MONO;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const ts = niceStep(Tm / 6);
+  for (let v = 0; v <= Tm + 1e-9; v += ts){
+    const Y = Math.round(py(v)) + .5;
+    ctx.strokeStyle = th.grid;
+    ctx.beginPath(); ctx.moveTo(xa, Y); ctx.lineTo(xb, Y); ctx.stroke();
+    ctx.fillStyle = th.faint;
+    ctx.fillText(String(Math.round(v * 100) / 100), xa - 7, py(v));
+  }
+
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const pass of [0, 1]){                       // 0: 全体を薄く / 1: 現在時刻まで濃く
+    ctx.lineWidth = pass ? 2 : 1.2;
+    for (let i = 0; i < state.ants.length; i++){
+      for (const s of sim.segs[i]){
+        const t1 = pass ? Math.min(s.t1, t) : s.t1;
+        if (t1 <= s.t0 + 1e-9) continue;
+        ctx.strokeStyle = segColor(i, s, pass ? 0.95 : 0.16);
+        ctx.beginPath();
+        ctx.moveTo(px(s.x0), py(s.t0));
+        ctx.lineTo(px(s.x0 + s.d * (t1 - s.t0)), py(t1));
+        ctx.stroke();
+      }
+    }
+  }
+
+  const Y = py(t);
+  ctx.strokeStyle = th.accent; ctx.globalAlpha = .4; ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(xa, Y); ctx.lineTo(xb, Y); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+  for (let i = 0; i < state.ants.length; i++){
+    const a = antAt(sim, i, t, L);
+    if (a.fallen) continue;
+    ctx.fillStyle = segColor(i, a.seg, undefined);
+    ctx.beginPath(); ctx.arc(px(a.x), Y, 3.2, 0, 7); ctx.fill();
+    ctx.strokeStyle = th.surface; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+}
+
+const draw = () => { drawScene(); drawChart(); };
+
+/* ============================================================
+   5. UI
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const fmt = v => (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(2));
+const snapUnit = () => (state.L <= 20 ? 0.5 : 1);
+const occupied = (v, skip) => state.ants.some((a, i) => i !== skip && Math.abs(a.x - v) < 1e-6);
+
+function theoretical(){
+  let mn = 0, mx = 0;
+  for (const a of state.ants){
+    mn = Math.max(mn, Math.min(a.x, state.L - a.x));
+    mx = Math.max(mx, Math.max(a.x, state.L - a.x));
+  }
+  return { mn, mx };
+}
+
+function freeSlots(){
+  const u = snapUnit(), out = [];
+  for (let k = 1; k * u < state.L - 1e-9; k++){
+    const v = Math.round(k * u * 1e6) / 1e6;
+    if (!occupied(v, -1)) out.push(v);
+  }
+  return out;
+}
+// いちばん広く空いているところへ 1 匹足す
+function addAnt(){
+  const slots = freeSlots();
+  if (!slots.length) return false;
+  const pts = [0, ...state.ants.map(a => a.x).sort((a, b) => a - b), state.L];
+  let target = state.L / 2, bg = -1;
+  for (let i = 0; i + 1 < pts.length; i++){
+    const g = pts[i + 1] - pts[i];
+    if (g > bg){ bg = g; target = (pts[i] + pts[i + 1]) / 2; }
+  }
+  let best = slots[0];
+  for (const v of slots) if (Math.abs(v - target) < Math.abs(best - target)) best = v;
+  state.ants.push({ x:best, d: state.ants.length % 2 === 0 ? 1 : -1 });
+  return true;
+}
+function setCount(n){
+  n = Math.max(0, Math.min(24, Math.round(n) || 0));
+  while (state.ants.length > n) state.ants.pop();
+  while (state.ants.length < n) if (!addAnt()) break;
+  resim(true);
+}
+
+function syncUI(){
+  const th = theoretical();
+  $("sT").textContent = fmt(sim.T);
+  $("sMin").textContent = fmt(th.mn);
+  $("sMax").textContent = fmt(th.mx);
+  $("sC").textContent = String(sim.collisions.length);
+  let l = 0, r = 0;
+  for (const f of sim.fall){ if (!f) continue; if (f.side < 0) l++; else r++; }
+  $("sLR").textContent = l + " / " + r;
+  $("tEnd").textContent = sim.T.toFixed(2);
+  $("antCount").textContent = state.ants.length + " 匹";
+  $("lenInput").value = state.L;
+  $("cntInput").value = state.ants.length;
+
+  const list = $("antList");
+  list.textContent = "";
+  if (!state.ants.length){
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "棒をクリックしてアリを置く。";
+    list.appendChild(p);
+  }
+  state.ants.forEach((a, i) => {
+    const row = document.createElement("div");
+    row.className = "ant-row";
+    const sw = document.createElement("span");
+    sw.className = "swatch"; sw.style.background = idColor(sim.rank[i]);
+    const xs = document.createElement("span");
+    xs.className = "ant-x"; xs.textContent = "x = " + fmt(a.x);
+    const db = document.createElement("button");
+    db.type = "button"; db.className = "mini dir"; db.textContent = a.d > 0 ? "→" : "←";
+    db.title = "向きを変える";
+    db.onclick = () => { a.d = -a.d; resim(true); };
+    const rb = document.createElement("button");
+    rb.type = "button"; rb.className = "mini"; rb.textContent = "✕"; rb.title = "取り除く";
+    rb.onclick = () => { state.ants.splice(i, 1); resim(true); };
+    row.append(sw, xs, db, rb);
+    list.appendChild(row);
+  });
+  tick();
+}
+
+function tick(){
+  $("playBtn").textContent = state.playing ? "❚❚" : "▶";
+  const frac = sim && sim.T > 0 ? state.t / sim.T : 0;
+  const sc = $("scrub");
+  sc.value = String(Math.round(frac * 1000));
+  sc.style.setProperty("--track", `linear-gradient(to right, var(--accent) 0 ${frac * 100}%, var(--surface-2) ${frac * 100}% 100%)`);
+  $("tNow").textContent = state.t.toFixed(2);
+}
+
+/* --- 棒の上での操作 --- */
+let drag = null;
+function sceneHit(ev){
+  const r = scene.getBoundingClientRect();
+  const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  const xa = PADL, xb = scene._w - PADR;
+  const val = ((mx - xa) / (xb - xa)) * state.L;
+  let hit = -1, best = 14;
+  if (my > 46 && my < 92){
+    for (let i = 0; i < state.ants.length; i++){
+      const a = antAt(sim, i, state.t, state.L);
+      if (a.fallen) continue;
+      const d = Math.abs(xa + (a.x / state.L) * (xb - xa) - mx);
+      if (d < best){ best = d; hit = i; }
+    }
+  }
+  return { val, hit, inBand: my > 44 && my < 94 };
+}
+const snap = v => Math.max(0, Math.min(state.L, Math.round(v / snapUnit()) * snapUnit()));
+
+scene.addEventListener("pointerdown", ev => {
+  if (!sim) return;
+  const h = sceneHit(ev);
+  if (h.hit >= 0){
+    scene.setPointerCapture(ev.pointerId);
+    state.t = 0; state.restartAt = 0; tick();   // 編集するのは初期配置なので先頭に戻す
+    drag = { i:h.hit, moved:false };
+  } else if (h.inBand){
+    const v = snap(h.val);
+    if (v > 0 && v < state.L && !occupied(v, -1) && state.ants.length < 24){
+      state.ants.push({ x:v, d:h.val < state.L / 2 ? 1 : -1 });
+      resim(true);
+    }
+  }
+});
+scene.addEventListener("pointermove", ev => {
+  if (!drag){
+    const h = sceneHit(ev);
+    scene.style.cursor = h.hit >= 0 ? "grab" : (h.inBand ? "crosshair" : "default");
+    return;
+  }
+  const v = snap(sceneHit(ev).val);
+  if (v > 0 && v < state.L && v !== state.ants[drag.i].x && !occupied(v, drag.i)){
+    state.ants[drag.i].x = v;
+    drag.moved = true;
+    resim(true);
+  }
+});
+scene.addEventListener("pointerup", ev => {
+  if (!drag) return;
+  if (!drag.moved){ state.ants[drag.i].d = -state.ants[drag.i].d; resim(true); }
+  try { scene.releasePointerCapture(ev.pointerId); } catch(e){}
+  drag = null;
+});
+scene.addEventListener("pointercancel", () => { drag = null; });
+
+/* --- コントロール --- */
+$("playBtn").onclick = () => {
+  if (!state.playing && state.t >= sim.T - 1e-9) state.t = 0;
+  state.playing = !state.playing; state.restartAt = 0; tick();
+};
+$("resetBtn").onclick = () => { state.t = 0; state.restartAt = 0; tick(); };
+$("loopChk").onchange = e => { state.loop = e.target.checked; };
+$("scrub").oninput = e => {
+  state.t = (Number(e.target.value) / 1000) * sim.T;
+  state.playing = false; state.restartAt = 0; tick();
+};
+$("speedSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.speed = Number(b.dataset.sp);
+  [...e.currentTarget.children].forEach(c => c.setAttribute("aria-pressed", String(c === b)));
+};
+const MODE_NOTE = {
+  ant:   "実際の動き。頭が触れたところで止まり、その場で向きを変える。",
+  ghost: "同じ場面を、衝突のたびに<b>色だけ</b>を交換して見たもの。位置の集合は変わらない。",
+};
+$("modeSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.mode = b.dataset.mode;
+  [...e.currentTarget.children].forEach(c => c.setAttribute("aria-pressed", String(c === b)));
+  $("modeNote").innerHTML = MODE_NOTE[state.mode];
+};
+$("modeNote").innerHTML = MODE_NOTE.ant;
+
+$("cntInput").onchange = e => setCount(Number(e.target.value));
+document.querySelectorAll("[data-cnt]").forEach(b => {
+  b.onclick = () => setCount(state.ants.length + Number(b.dataset.cnt));
+});
+function setLen(v){
+  state.L = Math.max(2, Math.min(400, v));
+  state.ants = state.ants.filter(a => a.x > 0 && a.x < state.L);
+  resim(true);
+}
+$("lenInput").onchange = e => setLen(Math.round(Number(e.target.value) || state.L));
+document.querySelectorAll("[data-len]").forEach(b => {
+  b.onclick = () => setLen(state.L + Number(b.dataset.len));
+});
+$("randBtn").onclick = () => {
+  const n = state.ants.length || 6;
+  const u = snapUnit(), slots = [];
+  for (let k = 1; k * u < state.L - 1e-9; k++) slots.push(Math.round(k * u * 1e6) / 1e6);
+  for (let i = slots.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [slots[i], slots[j]] = [slots[j], slots[i]]; }
+  state.ants = slots.slice(0, Math.min(n, slots.length)).sort((a, b) => a - b)
+    .map(x => ({ x, d: Math.random() < 0.5 ? -1 : 1 }));
+  resim(true);
+};
+$("dirBtns").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const m = b.dataset.dir;
+  for (const a of state.ants){
+    if (m === "min") a.d = a.x <= state.L - a.x ? -1 : 1;        // 近い端へ
+    else if (m === "max") a.d = a.x <= state.L - a.x ? 1 : -1;   // 遠い端へ
+    else if (m === "flip") a.d = -a.d;
+    else a.d = Math.random() < 0.5 ? -1 : 1;
+  }
+  resim(true);
+};
+PRESETS.forEach(p => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "btn"; b.textContent = p.name;
+  b.onclick = () => loadPreset(p);
+  $("presets").appendChild(b);
+});
+
+document.addEventListener("keydown", e => {
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+  if (e.code === "Space"){ e.preventDefault(); $("playBtn").click(); }
+  else if (e.key === "ArrowRight"){ e.preventDefault(); state.playing = false; state.t = Math.min(sim.T, state.t + 0.25); tick(); }
+  else if (e.key === "ArrowLeft"){ e.preventDefault(); state.playing = false; state.t = Math.max(0, state.t - 0.25); tick(); }
+  else if (e.key === "r" || e.key === "R"){ state.t = 0; state.restartAt = 0; tick(); }
+});
+
+/* ============================================================
+   6. ループ
+   ============================================================ */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (state.playing && sim){
+    state.t += dt * state.speed;
+    if (state.t >= sim.T){
+      state.t = sim.T;
+      state.playing = false;
+      if (state.loop && sim.T > 0) state.restartAt = now + 900;
+    }
+    tick();
+  }
+  if (state.restartAt && now >= state.restartAt){
+    state.restartAt = 0;
+    if (state.loop){ state.t = 0; state.playing = true; tick(); }
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+state.playing = !reduceMotion;
+loadPreset(PRESETS[0]);
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
