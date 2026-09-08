@@ -3,30 +3,7 @@
 長さ L の棒の上を n 匹のアリが毎秒 1cm で歩き、出会うと反転し、端で落ちる。
 その様子を**本当に反転させて**動かし、「反転＝すり抜け」の読み替えを時空図で見せる。
 
-## 使い方
-
-```
-npm install
-npm run dev      # 開発サーバ
-npm run test     # ドメイン層 + UI のテスト
-npm run build    # dist/index.html（外部依存ゼロの単一 HTML）
-```
-
-`npm run build` の出力 `dist/index.html` は外部リソースを一切参照しないので、
-そのままブラウザで開ける。
-
-## 公開（GitHub Pages）
-
-`main` に push すると `.github/workflows/deploy.yml` が走り、テストが通った場合だけ
-ビルド結果 (`dist/`) が GitHub Pages に公開される。
-
-初回だけ、リポジトリの **Settings → Pages → Build and deployment → Source** を
-**GitHub Actions** に変えておく必要がある（既定の "Deploy from a branch" のままだと失敗する）。
-
-公開先: https://tzug1729.github.io/ants-simulator/
-
-`vite.config.ts` の `base` は `"./"`。出力が完全に自己完結した 1 枚の HTML なので、
-`/<repo>/` 配下でも、別のホスティングでも、ローカルで直接開いても同じように動く。
+[Visit Site](https://tzug1729.github.io/ants-simulator/)
 
 ## 構成
 
@@ -50,20 +27,3 @@ src/
     AnimationLoop  requestAnimationFrame の包み
     components/    App, Stage, Transport, ControlPanel, Explain, ui
 ```
-
-計算とアニメーションは React の再描画を経由しない。
-`PlaybackClock` が毎フレーム進み、Canvas は直接描き直す。
-React が再描画するのは、操作で配置が変わったときと、時刻表示などの小さな部品だけ。
-
-## 設計上の要点
-
-**物理はアリを点として扱う。** これが競技プログラミングの問題そのもので、
-全滅時刻・理論上の最短/最長は教科書の値と一致する。
-
-**そのまま描くと衝突の瞬間に 2 匹が完全に重なる**ので、`RodSeparator` が描画位置だけを
-体の長さぶん押し分ける。制約付き最小二乗を等調回帰（PAVA）で解いているため、
-離れたアリは動かず、ぶつかった 2 匹はちょうど接する位置で止まり、
-3 匹以上の数珠つなぎも塊ごとに正しく展開される。答えの数値には影響しない。
-
-**時空図の線の形は、2 つのモードでまったく同じ。** 変わるのは色の割り当て
-（＝どの線を同じ 1 匹と見なすか）だけで、それがジグザグと直線を分けている。
