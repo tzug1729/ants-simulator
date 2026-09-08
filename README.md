@@ -9,11 +9,24 @@
 npm install
 npm run dev      # 開発サーバ
 npm run test     # ドメイン層 + UI のテスト
-npm run build    # dist/index.html（単一 HTML）と dist/artifact.html を生成
+npm run build    # dist/index.html（外部依存ゼロの単一 HTML）
 ```
 
 `npm run build` の出力 `dist/index.html` は外部リソースを一切参照しないので、
 そのままブラウザで開ける。
+
+## 公開（GitHub Pages）
+
+`main` に push すると `.github/workflows/deploy.yml` が走り、テストが通った場合だけ
+ビルド結果 (`dist/`) が GitHub Pages に公開される。
+
+初回だけ、リポジトリの **Settings → Pages → Build and deployment → Source** を
+**GitHub Actions** に変えておく必要がある（既定の "Deploy from a branch" のままだと失敗する）。
+
+公開先: https://tzug1729.github.io/ants-simulator/
+
+`vite.config.ts` の `base` は `"./"`。出力が完全に自己完結した 1 枚の HTML なので、
+`/<repo>/` 配下でも、別のホスティングでも、ローカルで直接開いても同じように動く。
 
 ## 構成
 

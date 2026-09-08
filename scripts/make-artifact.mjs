@@ -13,8 +13,12 @@ const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
 
 if (!body.trim()) throw new Error(`${source} から body を取り出せませんでした`);
 
-// charset / viewport は Artifact の外枠が持っている
-const keptHead = head.replace(/<meta\b[^>]*>/gi, "").trim();
+// charset / viewport / favicon は Artifact の外枠が持っている
+const keptHead = head
+  .replace(/<meta\b[^>]*>/gi, "")
+  .replace(/<link\b[^>]*>/gi, "")
+  .trim();
+if (/<link\b/i.test(keptHead)) throw new Error("head から link を取り除けませんでした");
 const fragment = `${keptHead}\n${body.trim()}\n`;
 
 writeFileSync(target, fragment, "utf8");
